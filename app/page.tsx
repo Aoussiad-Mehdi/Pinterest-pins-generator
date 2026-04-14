@@ -56,15 +56,11 @@ export default function HomePage() {
     }
   };
 
-  const handleDownload = async (imageUrl: string, keyword: string) => {
-    const response = await fetch(imageUrl);
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
+  const handleDownload = (imageUrl: string, keyword: string) => {
     const link = document.createElement('a');
-    link.href = url;
+    link.href = imageUrl;
     link.download = `${keyword.replace(/\s+/g, '-').toLowerCase()}-pin.png`;
     link.click();
-    URL.revokeObjectURL(url);
   };
 
   return (
@@ -94,8 +90,8 @@ export default function HomePage() {
       {error ? <p className="error">{error}</p> : null}
 
       <section className="results">
-        {pins.map((pin) => (
-          <article className="card" key={pin.keyword}>
+        {pins.map((pin, index) => (
+          <article className="card" key={`${pin.keyword}-${index}`}>
             <img src={pin.image_url} alt={pin.alt_text} loading="lazy" />
             <h3>{pin.pinterest_title}</h3>
             <p>{pin.pinterest_description}</p>

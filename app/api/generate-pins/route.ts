@@ -9,6 +9,12 @@ type Pin = {
   alt_text: string;
 };
 
+type Metadata = {
+  pinterest_title: string;
+  pinterest_description: string;
+  alt_text: string;
+};
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const METADATA_PROMPT = `You are creating Pinterest pin content for an art blog.
@@ -43,32 +49,23 @@ Make the layout suitable for Pinterest
 Use 9:16 format
 Use strong contrast so the text is easy to read`;
 
-const extractMetadata = (rawText: string) => {
-  try {
-    const parsed = JSON.parse(rawText) as {
-      pinterest_title?: string;
-      pinterest_description?: string;
-      alt_text?: string;
-    };
+const parseMetadata = (content: string, keyword: string): Metadata => {
+  const parsed = JSON.parse(content) as Partial<Metadata>;
 
-    return {
-      pinterest_title: (parsed.pinterest_title || '').slice(0, 100),
-      pinterest_description: (parsed.pinterest_description || '').slice(0, 500),
-      alt_text: parsed.alt_text || ''
-    };
-  } catch {
-    throw new Error('Text model did not return valid JSON.');
-  }
+  return {
+    pinterest_title: (parsed.pinterest_title || keyword).slice(0, 100),
+    pinterest_description: (parsed.pinterest_description || `Discover ${keyword} ideas for your next art project.`).slice(0, 500),
+    alt_text: keyword
+  };
 };
 
-const generatePinForKeyword = async (keyword: string): Promise<Pin> => {
-  const metadataPrompt = METADATA_PROMPT.replace('[KEYWORD]', keyword);
-  const metadataResponse = await openai.responses.create({
-    model: 'gpt-4.1-mini',
-    input: metadataPrompt,
-    text: {
-      format: {
-        type: 'json_schema',
+const generateMetadata = async (keyword: string): Promise<Metadata> => {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    temperature: 0.7,
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
         name: 'pin_metadata',
         strict: true,
         schema: {
@@ -82,27 +79,47 @@ const generatePinForKeyword = async (keyword: string): Promise<Pin> => {
           required: ['pinterest_title', 'pinterest_description', 'alt_text']
         }
       }
-    }
+    },
+    messages: [
+      {
+        role: 'user',
+        content: METADATA_PROMPT.replace('[KEYWORD]', keyword)
+      }
+    ]
   });
 
-  const metadataRaw = metadataResponse.output_text;
-  const metadata = extractMetadata(metadataRaw);
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error(`No metadata returned for keyword: ${keyword}`);
+  }
 
+  return parseMetadata(content, keyword);
+};
+
+const generateImage = async (keyword: string): Promise<string> => {
   const imagePrompt = IMAGE_PROMPT.replaceAll('[target keyword]', keyword);
+
+  // gpt-image-1 currently supports 1024x1536 for portrait. We return this in 2:3 and render as pin cards.
   const imageResponse = await openai.images.generate({
     model: 'gpt-image-1',
     prompt: imagePrompt,
-    size: '1080x1920'
+    size: '1024x1536'
   });
 
   const imageBase64 = imageResponse.data?.[0]?.b64_json;
   if (!imageBase64) {
-    throw new Error(`Image generation failed for keyword: ${keyword}`);
+    throw new Error(`No image returned for keyword: ${keyword}`);
   }
+
+  return `data:image/png;base64,${imageBase64}`;
+};
+
+const generatePinForKeyword = async (keyword: string): Promise<Pin> => {
+  const [metadata, image_url] = await Promise.all([generateMetadata(keyword), generateImage(keyword)]);
 
   return {
     keyword,
-    image_url: `data:image/png;base64,${imageBase64}`,
+    image_url,
     pinterest_title: metadata.pinterest_title,
     pinterest_description: metadata.pinterest_description,
     alt_text: keyword
@@ -122,11 +139,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'OPENAI_API_KEY is not configured.' }, { status: 500 });
     }
 
-    const pins = await Promise.all(keywords.map((keyword) => generatePinForKeyword(keyword)));
+    const pins: Pin[] = [];
+    for (const keyword of keywords) {
+      const pin = await generatePinForKeyword(keyword);
+      pins.push(pin);
+    }
 
     return NextResponse.json({ pins });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: 'Failed to generate pins.' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Pin generation failed:', message, error);
+    return NextResponse.json({ error: `Failed to generate pins: ${message}` }, { status: 500 });
   }
 }

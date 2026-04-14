@@ -31,28 +31,60 @@ const buildImagePrompt = (pin: PinImageInput) => {
   return `${pin.custom_prompt.trim()} Apply graphic design best practices: strong contrast, visual hierarchy, clean spacing, readable typography, and vibrant colors. Ensure center text is exactly '${pin.keyword}' and add '${BRAND_URL}' at the bottom.`;
 };
 
-const uploadToPublicStorage = async (base64Image: string, keyword: string): Promise<string> => {
-  const fileBuffer = Buffer.from(base64Image, 'base64');
-  const file = new File([fileBuffer], `${keyword.replace(/\s+/g, '-').toLowerCase()}.png`, { type: 'image/png' });
-
+const uploadTo0x0 = async (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
 
-  const uploadResponse = await fetch('https://0x0.st', {
+  const response = await fetch('https://0x0.st', {
     method: 'POST',
     body: formData
   });
 
-  if (!uploadResponse.ok) {
-    throw new Error(`Public upload failed for keyword: ${keyword}`);
+  if (!response.ok) {
+    throw new Error(`0x0.st upload HTTP ${response.status}`);
   }
 
-  const uploadedUrl = (await uploadResponse.text()).trim();
-  if (!uploadedUrl.startsWith('http://') && !uploadedUrl.startsWith('https://')) {
-    throw new Error(`Public upload returned invalid URL for keyword: ${keyword}`);
+  return (await response.text()).trim();
+};
+
+const uploadToCatbox = async (file: File) => {
+  const formData = new FormData();
+  formData.append('reqtype', 'fileupload');
+  formData.append('fileToUpload', file);
+
+  const response = await fetch('https://catbox.moe/user/api.php', {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!response.ok) {
+    throw new Error(`catbox upload HTTP ${response.status}`);
   }
 
-  return uploadedUrl;
+  return (await response.text()).trim();
+};
+
+const uploadToPublicStorage = async (base64Image: string, keyword: string): Promise<string> => {
+  const fileBuffer = Buffer.from(base64Image, 'base64');
+  const safeName = keyword.replace(/[^a-zA-Z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'pin';
+  const file = new File([fileBuffer], `${safeName}.png`, { type: 'image/png' });
+
+  const attempts: Array<() => Promise<string>> = [() => uploadTo0x0(file), () => uploadToCatbox(file)];
+
+  let lastError = '';
+  for (const attempt of attempts) {
+    try {
+      const uploadedUrl = await attempt();
+      if (uploadedUrl.startsWith('http://') || uploadedUrl.startsWith('https://')) {
+        return uploadedUrl;
+      }
+      lastError = `Invalid upload URL returned: ${uploadedUrl}`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : 'Unknown upload error';
+    }
+  }
+
+  throw new Error(`Public upload failed for keyword: ${keyword}. Last error: ${lastError}`);
 };
 
 const generateImage = async (pin: PinImageInput): Promise<string> => {

@@ -22,12 +22,18 @@ Simple Next.js app that generates Pinterest pins from user keywords using OpenAI
 
 - 5 keyword inputs (keyword #1 required, #2-#5 optional)
 - Pins generated = number of keywords entered (1 to 5)
-- Two-step flow for speed + cost control:
+- Two-step flow:
   1. Generate Text (single metadata request for all keywords)
   2. Generate All Images (parallel image requests with `Promise.all`)
-- Cost/performance best practices:
-  - concise prompts
-  - low temperature for metadata consistency
-  - token cap for metadata response
-  - low image quality setting for lower cost
-- Pin cards include image, title, description, exact-keyword alt text, and download button
+- SEO copy rules:
+  - simple language, active voice, clean punctuation
+  - title includes exact keyword
+  - alt text equals exact keyword
+- Image controls:
+  - eye-catching vibrant style with brand URL at bottom (`mehdiaoussiad.com/blog`)
+  - optional custom prompt per pin
+  - regenerate image per pin
+- Utilities:
+  - copy title
+  - copy description
+  - download image

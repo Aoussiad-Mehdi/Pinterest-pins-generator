@@ -8,6 +8,8 @@ type PinResult = {
   pinterest_title: string;
   pinterest_description: string;
   alt_text: string;
+  custom_prompt?: string;
+  brand_url?: string;
 };
 
 const EMPTY_KEYWORDS = ['', '', '', '', ''];
@@ -16,6 +18,7 @@ export default function HomePage() {
   const [keywords, setKeywords] = useState<string[]>(EMPTY_KEYWORDS);
   const [loadingText, setLoadingText] = useState(false);
   const [loadingImages, setLoadingImages] = useState(false);
+  const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [pins, setPins] = useState<PinResult[]>([]);
 
@@ -23,6 +26,18 @@ export default function HomePage() {
 
   const setKeyword = (index: number, value: string) => {
     setKeywords((prev) => prev.map((item, i) => (i === index ? value : item)));
+  };
+
+  const setCustomPrompt = (index: number, value: string) => {
+    setPins((prev) => prev.map((pin, i) => (i === index ? { ...pin, custom_prompt: value } : pin)));
+  };
+
+  const copyText = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+    } catch {
+      setError('Copy failed. Please copy manually.');
+    }
   };
 
   const handleGenerateText = async (event: FormEvent<HTMLFormElement>) => {
@@ -58,6 +73,21 @@ export default function HomePage() {
     }
   };
 
+  const requestImages = async (pinsPayload: PinResult[]) => {
+    const response = await fetch('/api/generate-images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pins: pinsPayload })
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload.error || 'Failed to generate images.');
+    }
+
+    return (payload as { pins: PinResult[] }).pins || [];
+  };
+
   const handleGenerateImages = async () => {
     setError('');
     if (!pins.length) {
@@ -67,22 +97,35 @@ export default function HomePage() {
 
     setLoadingImages(true);
     try {
-      const response = await fetch('/api/generate-images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pins })
-      });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload.error || 'Failed to generate images.');
-      }
-
-      setPins((payload as { pins: PinResult[] }).pins || []);
+      const nextPins = await requestImages(pins);
+      setPins(nextPins);
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : 'Unexpected error');
     } finally {
       setLoadingImages(false);
+    }
+  };
+
+  const handleRegenerateImage = async (index: number) => {
+    setError('');
+    setRegeneratingIndex(index);
+
+    try {
+      const target = pins[index];
+      if (!target) {
+        throw new Error('Pin not found.');
+      }
+
+      const result = await requestImages([target]);
+      if (!result[0]) {
+        throw new Error('No regenerated image returned.');
+      }
+
+      setPins((prev) => prev.map((pin, i) => (i === index ? { ...pin, ...result[0] } : pin)));
+    } catch (fetchError) {
+      setError(fetchError instanceof Error ? fetchError.message : 'Unexpected error');
+    } finally {
+      setRegeneratingIndex(null);
     }
   };
 
@@ -96,7 +139,7 @@ export default function HomePage() {
   return (
     <main>
       <h1>Pinterest Pin Generator</h1>
-      <p>Add 1 to 5 keywords. First generate text, then click Generate All Images.</p>
+      <p>Add 1 to 5 keywords. Generate text first, then generate all images.</p>
 
       <form onSubmit={handleGenerateText}>
         <div className="form-grid">
@@ -138,13 +181,42 @@ export default function HomePage() {
             <p className="alt">
               <strong>Alt text:</strong> {pin.alt_text}
             </p>
-            <button
-              type="button"
-              disabled={!pin.image_url}
-              onClick={() => pin.image_url && handleDownload(pin.image_url, pin.keyword)}
-            >
-              Download
-            </button>
+            <p className="brand">
+              <strong>Brand:</strong> {pin.brand_url || 'mehdiaoussiad.com/blog'}
+            </p>
+
+            <div className="copy-row">
+              <button type="button" onClick={() => copyText(pin.pinterest_title)}>
+                Copy Title
+              </button>
+              <button type="button" onClick={() => copyText(pin.pinterest_description)}>
+                Copy Description
+              </button>
+            </div>
+
+            <input
+              type="text"
+              placeholder="Custom image prompt (optional)"
+              value={pin.custom_prompt || ''}
+              onChange={(event) => setCustomPrompt(index, event.target.value)}
+            />
+
+            <div className="copy-row">
+              <button
+                type="button"
+                disabled={loadingImages || regeneratingIndex === index}
+                onClick={() => handleRegenerateImage(index)}
+              >
+                {regeneratingIndex === index ? 'Regenerating...' : 'Regenerate Image'}
+              </button>
+              <button
+                type="button"
+                disabled={!pin.image_url}
+                onClick={() => pin.image_url && handleDownload(pin.image_url, pin.keyword)}
+              >
+                Download
+              </button>
+            </div>
           </article>
         ))}
       </section>

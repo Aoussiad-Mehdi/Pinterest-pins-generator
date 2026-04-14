@@ -116,3 +116,19 @@ button:disabled {
   text-align: center;
   padding: 0.75rem;
 }
+
+
+.copy-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.copy-row button {
+  margin-top: 0.5rem;
+}
+
+.brand {
+  font-size: 0.85rem;
+  color: #334155;
+}

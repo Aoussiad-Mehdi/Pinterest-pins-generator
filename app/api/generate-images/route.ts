@@ -6,24 +6,34 @@ type PinImageInput = {
   pinterest_title: string;
   pinterest_description: string;
   alt_text: string;
+  custom_prompt?: string;
 };
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const BRAND_URL = 'mehdiaoussiad.com/blog';
 
-const IMAGE_PROMPT = (keyword: string) =>
-  `Pinterest pin art niche: ${keyword}. Center bold text exactly '${keyword}'. Clean minimal, strong contrast, eye-catching.`;
+const defaultImagePrompt = (keyword: string) =>
+  `Create an eye-catching Pinterest pin for ${keyword}. Use vibrant colors, clean layout, and strong contrast. Center bold text exactly '${keyword}' with no spelling mistakes. Add small brand text '${BRAND_URL}' at the bottom. Make it professional and Pinterest-ready.`;
 
-const generateImage = async (keyword: string): Promise<string> => {
+const buildImagePrompt = (pin: PinImageInput) => {
+  if (!pin.custom_prompt?.trim()) {
+    return defaultImagePrompt(pin.keyword);
+  }
+
+  return `${pin.custom_prompt.trim()} Ensure the exact center text is '${pin.keyword}', use vibrant colors, avoid mistakes, and add '${BRAND_URL}' at the bottom.`;
+};
+
+const generateImage = async (pin: PinImageInput): Promise<string> => {
   const response = await openai.images.generate({
     model: 'gpt-image-1',
-    prompt: IMAGE_PROMPT(keyword),
+    prompt: buildImagePrompt(pin),
     size: '1024x1536',
     quality: 'low'
   });
 
   const imageBase64 = response.data?.[0]?.b64_json;
   if (!imageBase64) {
-    throw new Error(`No image returned for keyword: ${keyword}`);
+    throw new Error(`No image returned for keyword: ${pin.keyword}`);
   }
 
   return `data:image/png;base64,${imageBase64}`;
@@ -42,12 +52,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please provide at least 1 pin text payload.' }, { status: 400 });
     }
 
-    const images = await Promise.all(pins.map((pin) => generateImage(pin.keyword.trim())));
+    const images = await Promise.all(pins.map((pin) => generateImage(pin)));
 
     const completedPins = pins.map((pin, index) => ({
       ...pin,
       alt_text: pin.keyword,
-      image_url: images[index]
+      image_url: images[index],
+      brand_url: BRAND_URL
     }));
 
     return NextResponse.json({ pins: completedPins });

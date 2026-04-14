@@ -42,7 +42,7 @@ Simple Next.js app that generates Pinterest pins from user keywords using OpenAI
 - Image generation quality/cost balance:
   - model: `gpt-image-1`
   - quality: `medium`
-  - size: `1024x1024` to lower cost and payload size
+  - size: `1024x1536` (2:3 vertical canvas, aligned to ~1000x1500 target)
   - prompts enforce vibrant contrast and graphic-design best practices for art pins
 
 - Keywords field:

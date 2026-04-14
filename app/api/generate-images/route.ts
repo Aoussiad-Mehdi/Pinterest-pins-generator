@@ -19,17 +19,17 @@ const BRAND_URL = 'mehdiaoussiad.com/blog';
 // Balance quality + cost: use gpt-image-1 with medium quality for better text fidelity than low.
 const IMAGE_MODEL = 'gpt-image-1';
 const IMAGE_QUALITY: 'medium' = 'medium';
-const IMAGE_SIZE = '1024x1024';
+const IMAGE_SIZE = '1024x1536';
 
 const defaultImagePrompt = (keyword: string) =>
-  `Create a high-CTR Pinterest pin for art niche topic '${keyword}'. Use vivid colors, strong color contrast, clean typography, and clear visual hierarchy. Keep layout balanced with whitespace and a focal point. Center bold text exactly '${keyword}' with correct spelling. Add small brand text '${BRAND_URL}' at the bottom. Make it eye-catching and professional.`;
+  `Create a high-CTR Pinterest pin for art niche topic '${keyword}'. Use vivid colors, strong color contrast, clean typography, and clear visual hierarchy. Keep layout balanced with whitespace and a focal point. Center bold text exactly '${keyword}' with correct spelling. Add small brand text '${BRAND_URL}' at the bottom. Use 2:3 vertical composition (target canvas 1000x1500), export-ready PNG look, eye-catching and professional.`;
 
 const buildImagePrompt = (pin: PinImageInput) => {
   if (!pin.custom_prompt?.trim()) {
     return defaultImagePrompt(pin.keyword);
   }
 
-  return `${pin.custom_prompt.trim()} Apply graphic design best practices: strong contrast, visual hierarchy, clean spacing, readable typography, and vibrant colors. Ensure center text is exactly '${pin.keyword}' and add '${BRAND_URL}' at the bottom.`;
+  return `${pin.custom_prompt.trim()} Apply graphic design best practices: strong contrast, visual hierarchy, clean spacing, readable typography, and vibrant colors. Ensure center text is exactly '${pin.keyword}' and add '${BRAND_URL}' at the bottom. Keep a 2:3 vertical composition close to 1000x1500 PNG output.`;
 };
 
 const uploadTo0x0 = async (file: File) => {

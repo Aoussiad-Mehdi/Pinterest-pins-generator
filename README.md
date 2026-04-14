@@ -18,22 +18,22 @@ Simple Next.js app that generates Pinterest pins from user keywords using OpenAI
    npm run dev
    ```
 
-## Features
+## Workflow
 
-- 5 keyword inputs (keyword #1 required, #2-#5 optional)
-- Pins generated = number of keywords entered (1 to 5)
-- Two-step flow:
-  1. Generate Text (single metadata request for all keywords)
-  2. Generate All Images (parallel image requests with `Promise.all`)
-- SEO copy rules:
-  - simple language, active voice, clean punctuation
-  - title includes exact keyword
-  - alt text equals exact keyword
-- Image controls:
-  - eye-catching vibrant style with brand URL at bottom (`mehdiaoussiad.com/blog`)
-  - optional custom prompt per pin
-  - regenerate image per pin
-- Utilities:
-  - copy title
-  - copy description
-  - download image
+1. Generate Text
+2. Generate All Images
+3. Edit each pin's **Pin URL** and **Pinterest board name**
+4. Click **Create CSV** to download `pinterest-pins-export.csv`
+
+## CSV export details
+
+- Columns (exact order):
+  `Title,Media URL,Pinterest board,Thumbnail,Description,Link,Publish date,Keywords`
+- Media URLs are public links uploaded during image generation (not base64/blob/local paths).
+- Schedule strategy in UTC:
+  - Pin 1: immediate (`""`)
+  - Pin 2: now + 5 days
+  - Pin 3: now + 10 days
+  - Pin 4: now + 17 days
+  - Pin 5: now + 24 days
+- Dates formatted as `YYYY-MM-DDTHH:MM:SS`.

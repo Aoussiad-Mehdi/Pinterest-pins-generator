@@ -2,11 +2,15 @@ import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
 
 type PinImageInput = {
+  id?: string;
   keyword: string;
   pinterest_title: string;
   pinterest_description: string;
   alt_text: string;
   custom_prompt?: string;
+  pinUrl?: string;
+  boardName?: string;
+  keywords?: string[] | string;
 };
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -23,6 +27,30 @@ const buildImagePrompt = (pin: PinImageInput) => {
   return `${pin.custom_prompt.trim()} Ensure the exact center text is '${pin.keyword}', use vibrant colors, avoid mistakes, and add '${BRAND_URL}' at the bottom.`;
 };
 
+const uploadToPublicStorage = async (base64Image: string, keyword: string): Promise<string> => {
+  const fileBuffer = Buffer.from(base64Image, 'base64');
+  const file = new File([fileBuffer], `${keyword.replace(/\s+/g, '-').toLowerCase()}.png`, { type: 'image/png' });
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const uploadResponse = await fetch('https://0x0.st', {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error(`Public upload failed for keyword: ${keyword}`);
+  }
+
+  const uploadedUrl = (await uploadResponse.text()).trim();
+  if (!uploadedUrl.startsWith('http://') && !uploadedUrl.startsWith('https://')) {
+    throw new Error(`Public upload returned invalid URL for keyword: ${keyword}`);
+  }
+
+  return uploadedUrl;
+};
+
 const generateImage = async (pin: PinImageInput): Promise<string> => {
   const response = await openai.images.generate({
     model: 'gpt-image-1',
@@ -36,7 +64,7 @@ const generateImage = async (pin: PinImageInput): Promise<string> => {
     throw new Error(`No image returned for keyword: ${pin.keyword}`);
   }
 
-  return `data:image/png;base64,${imageBase64}`;
+  return uploadToPublicStorage(imageBase64, pin.keyword);
 };
 
 export async function POST(request: Request) {
@@ -52,12 +80,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please provide at least 1 pin text payload.' }, { status: 400 });
     }
 
-    const images = await Promise.all(pins.map((pin) => generateImage(pin)));
+    const mediaUrls = await Promise.all(pins.map((pin) => generateImage(pin)));
 
     const completedPins = pins.map((pin, index) => ({
       ...pin,
+      id: pin.id || `${pin.keyword}-${index + 1}`,
+      title: pin.pinterest_title,
+      description: pin.pinterest_description,
+      keywords: pin.keywords || [pin.keyword],
+      mediaUrl: mediaUrls[index],
+      image_url: mediaUrls[index],
+      pinUrl: pin.pinUrl || '',
+      boardName: pin.boardName || '',
       alt_text: pin.keyword,
-      image_url: images[index],
       brand_url: BRAND_URL
     }));
 

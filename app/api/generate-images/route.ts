@@ -21,17 +21,19 @@ const IMAGE_MODEL = 'gpt-image-1';
 const IMAGE_QUALITY: 'medium' = 'medium';
 const IMAGE_SIZE = '1024x1536';
 
-const DEFAULT_IMAGE_PROMPT =
-  'Design a good-looking Pinterest pin for this blog post: [target keyword]. Use bold and large text overlay in the center. text overlay is: [target keyword]. Use minimal design. Follow design best practices to get the best CTR.\n\nImportant rules:\n\nThe text overlay must be the exact keyword\nEach pin design must be unique for each keyword\nKeep the design clean and eye-catching\nMake the layout suitable for Pinterest\nUse 9:16 format\nUse strong contrast so the text is easy to read';
+const LAYOUT_STYLES = ['collage', 'sketchbook style', 'split layout', 'scrapbook style', 'editorial poster style'];
 
 const isPublicHttpUrl = (value?: string) => !!value && /^https?:\/\//i.test(value.trim());
 
-const buildImagePrompt = (pin: PinImageInput) => {
+const defaultImagePrompt = (keyword: string, layoutStyle: string) =>
+  `Design a Pinterest pin for keyword: ${keyword}. Do not use plain or empty color backgrounds. Create a visually rich artistic background related to the keyword using elements like drawings, sketches, watercolor textures, doodles, or art supplies. Use this layout style: ${layoutStyle}. Place exact keyword text '${keyword}' as large bold overlay in a clean readable area at top or center. Make the design eye-catching and artistic. Ensure strong readability and high contrast for the text. Keep it suitable for Pinterest vertical 9:16.`;
+
+const buildImagePrompt = (pin: PinImageInput, layoutStyle: string) => {
   if (pin.custom_prompt?.trim()) {
     return pin.custom_prompt.trim();
   }
 
-  return DEFAULT_IMAGE_PROMPT.replaceAll('[target keyword]', pin.keyword);
+  return defaultImagePrompt(pin.keyword, layoutStyle);
 };
 
 const uploadTo0x0 = async (file: File) => {
@@ -112,10 +114,11 @@ const uploadToPublicStorage = async (base64Image: string, keyword: string): Prom
   throw new Error(`Public upload failed for keyword: ${keyword}. Last error: ${lastError}`);
 };
 
-const generateImage = async (pin: PinImageInput): Promise<string> => {
+const generateImage = async (pin: PinImageInput, index: number): Promise<string> => {
+  const layoutStyle = LAYOUT_STYLES[index % LAYOUT_STYLES.length];
   const response = await openai.images.generate({
     model: IMAGE_MODEL,
-    prompt: buildImagePrompt(pin),
+    prompt: buildImagePrompt(pin, layoutStyle),
     size: IMAGE_SIZE,
     quality: IMAGE_QUALITY
   });
@@ -148,11 +151,11 @@ export async function POST(request: Request) {
     }
 
     const mediaUrls = await Promise.all(
-      pins.map((pin) => {
+      pins.map((pin, index) => {
         if (!forceRegenerate && !pin.custom_prompt?.trim() && isPublicHttpUrl(pin.mediaUrl)) {
           return Promise.resolve(pin.mediaUrl!.trim());
         }
-        return generateImage(pin);
+        return generateImage(pin, index);
       })
     );
 

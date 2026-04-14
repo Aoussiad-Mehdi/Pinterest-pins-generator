@@ -14,22 +14,21 @@ type PinImageInput = {
 };
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const BRAND_URL = 'mehdiaoussiad.com/blog';
+const BRAND_URL = 'www.mehdiaoussiad.com';
 
-// Balance quality + cost: use gpt-image-1 with medium quality for better text fidelity than low.
 const IMAGE_MODEL = 'gpt-image-1';
 const IMAGE_QUALITY: 'medium' = 'medium';
 const IMAGE_SIZE = '1024x1536';
 
-const defaultImagePrompt = (keyword: string) =>
-  `Create a high-CTR Pinterest pin for art niche topic '${keyword}'. Use vivid colors, strong color contrast, clean typography, and clear visual hierarchy. Keep layout balanced with whitespace and a focal point. Center bold text exactly '${keyword}' with correct spelling. Add small brand text '${BRAND_URL}' at the bottom. Use 2:3 vertical composition (target canvas 1000x1500), export-ready PNG look, eye-catching and professional.`;
+const defaultImagePrompt = (keyword: string, uniqueTag: string) =>
+  `Create a Pinterest pin image for '${keyword}'. Center text must be exactly '${keyword}'. Add small brand text '${BRAND_URL}' at the bottom. Use 2:3 vertical composition (target canvas 1000x1500), PNG-ready style. Make this design unique and different from other pins. Unique variation tag: ${uniqueTag}.`;
 
-const buildImagePrompt = (pin: PinImageInput) => {
+const buildImagePrompt = (pin: PinImageInput, uniqueTag: string) => {
   if (!pin.custom_prompt?.trim()) {
-    return defaultImagePrompt(pin.keyword);
+    return defaultImagePrompt(pin.keyword, uniqueTag);
   }
 
-  return `${pin.custom_prompt.trim()} Apply graphic design best practices: strong contrast, visual hierarchy, clean spacing, readable typography, and vibrant colors. Ensure center text is exactly '${pin.keyword}' and add '${BRAND_URL}' at the bottom. Keep a 2:3 vertical composition close to 1000x1500 PNG output.`;
+  return `${pin.custom_prompt.trim()} Ensure center text is exactly '${pin.keyword}', add '${BRAND_URL}' at the bottom, use 2:3 vertical composition close to 1000x1500 PNG output, and make this unique from other pins. Variation tag: ${uniqueTag}.`;
 };
 
 const uploadTo0x0 = async (file: File) => {
@@ -64,7 +63,6 @@ const uploadToCatbox = async (file: File) => {
 
   return (await response.text()).trim();
 };
-
 
 const uploadToTmpFiles = async (file: File) => {
   const formData = new FormData();
@@ -111,10 +109,11 @@ const uploadToPublicStorage = async (base64Image: string, keyword: string): Prom
   throw new Error(`Public upload failed for keyword: ${keyword}. Last error: ${lastError}`);
 };
 
-const generateImage = async (pin: PinImageInput): Promise<string> => {
+const generateImage = async (pin: PinImageInput, index: number): Promise<string> => {
+  const uniqueTag = `${pin.id || pin.keyword}-${index + 1}-${Date.now()}`;
   const response = await openai.images.generate({
     model: IMAGE_MODEL,
-    prompt: buildImagePrompt(pin),
+    prompt: buildImagePrompt(pin, uniqueTag),
     size: IMAGE_SIZE,
     quality: IMAGE_QUALITY
   });
@@ -140,7 +139,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please provide at least 1 pin text payload.' }, { status: 400 });
     }
 
-    const mediaUrls = await Promise.all(pins.map((pin) => generateImage(pin)));
+    const mediaUrls = await Promise.all(pins.map((pin, index) => generateImage(pin, index)));
 
     const completedPins = pins.map((pin, index) => ({
       ...pin,

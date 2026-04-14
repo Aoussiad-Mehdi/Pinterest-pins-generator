@@ -39,11 +39,12 @@ Simple Next.js app that generates Pinterest pins from user keywords using OpenAI
   - Pin 5: now + 24 days
 - Dates formatted as `YYYY-MM-DDTHH:MM:SS`.
 
-- Image generation quality/cost balance:
+- Image generation settings:
   - model: `gpt-image-1`
   - quality: `medium`
   - size: `1024x1536` (2:3 vertical canvas, aligned to ~1000x1500 target)
-  - prompts enforce vibrant contrast and graphic-design best practices for art pins
+  - brand URL embedded on image: `www.mehdiaoussiad.com`
+  - each image uses a unique variation tag to increase design uniqueness
 
 - Keywords field:
   - AI generates relevant search keywords for each pin

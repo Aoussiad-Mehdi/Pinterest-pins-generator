@@ -1,15 +1,7 @@
 import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
 
-type Pin = {
-  keyword: string;
-  image_url: string;
-  pinterest_title: string;
-  pinterest_description: string;
-  alt_text: string;
-};
-
-type Metadata = {
+type PinText = {
   keyword: string;
   pinterest_title: string;
   pinterest_description: string;
@@ -19,13 +11,9 @@ type Metadata = {
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const METADATA_PROMPT = `Write Pinterest SEO content for an art blog.
-Simple active voice.
-For each keyword, return JSON array items:
-keyword, pinterest_title(max100), pinterest_description(max500), alt_text(exact keyword).
+Use simple active voice.
+Return JSON with items: keyword, pinterest_title(max100), pinterest_description(max500), alt_text(exact keyword).
 Keywords:`;
-
-const IMAGE_PROMPT = (keyword: string) =>
-  `Pinterest pin for: ${keyword}. Center bold text exactly: ${keyword}. Minimal, high contrast, clean, unique style.`;
 
 const normalizeKeywords = (keywords: string[]) =>
   keywords
@@ -33,7 +21,7 @@ const normalizeKeywords = (keywords: string[]) =>
     .filter(Boolean)
     .slice(0, 5);
 
-const generateAllMetadata = async (keywords: string[]): Promise<Map<string, Metadata>> => {
+const generateAllMetadata = async (keywords: string[]): Promise<PinText[]> => {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     temperature: 0.3,
@@ -67,12 +55,7 @@ const generateAllMetadata = async (keywords: string[]): Promise<Map<string, Meta
         }
       }
     },
-    messages: [
-      {
-        role: 'user',
-        content: `${METADATA_PROMPT}\n${JSON.stringify(keywords)}`
-      }
-    ]
+    messages: [{ role: 'user', content: `${METADATA_PROMPT}\n${JSON.stringify(keywords)}` }]
   });
 
   const content = response.choices[0]?.message?.content;
@@ -80,36 +63,19 @@ const generateAllMetadata = async (keywords: string[]): Promise<Map<string, Meta
     throw new Error('No metadata returned.');
   }
 
-  const parsed = JSON.parse(content) as { items: Metadata[] };
-  const byKeyword = new Map<string, Metadata>();
+  const parsed = JSON.parse(content) as { items: PinText[] };
 
-  for (const keyword of keywords) {
+  return keywords.map((keyword) => {
     const hit = parsed.items.find((item) => item.keyword.trim().toLowerCase() === keyword.toLowerCase());
-    byKeyword.set(keyword, {
+
+    return {
       keyword,
       pinterest_title: (hit?.pinterest_title || keyword).slice(0, 100),
       pinterest_description:
         (hit?.pinterest_description || `Discover ${keyword} ideas, tips, and inspiration for your next art project.`).slice(0, 500),
       alt_text: keyword
-    });
-  }
-
-  return byKeyword;
-};
-
-const generateImage = async (keyword: string): Promise<string> => {
-  const response = await openai.images.generate({
-    model: 'gpt-image-1',
-    prompt: IMAGE_PROMPT(keyword),
-    size: '1024x1536'
+    };
   });
-
-  const imageBase64 = response.data?.[0]?.b64_json;
-  if (!imageBase64) {
-    throw new Error(`No image returned for keyword: ${keyword}`);
-  }
-
-  return `data:image/png;base64,${imageBase64}`;
 };
 
 export async function POST(request: Request) {
@@ -125,26 +91,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please provide at least 1 keyword.' }, { status: 400 });
     }
 
-    const metadataByKeyword = await generateAllMetadata(keywords);
-
-    const imageUrls = await Promise.all(keywords.map((keyword) => generateImage(keyword)));
-
-    const pins: Pin[] = keywords.map((keyword, index) => {
-      const metadata = metadataByKeyword.get(keyword);
-      return {
-        keyword,
-        image_url: imageUrls[index],
-        pinterest_title: metadata?.pinterest_title || keyword,
-        pinterest_description:
-          metadata?.pinterest_description || `Discover ${keyword} ideas, tips, and inspiration for your next art project.`,
-        alt_text: keyword
-      };
-    });
-
+    const pins = await generateAllMetadata(keywords);
     return NextResponse.json({ pins });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Pin generation failed:', message, error);
-    return NextResponse.json({ error: `Failed to generate pins: ${message}` }, { status: 500 });
+    return NextResponse.json({ error: `Failed to generate text: ${message}` }, { status: 500 });
   }
 }

@@ -11,6 +11,7 @@ type PinImageInput = {
   pinUrl?: string;
   boardName?: string;
   keywords?: string[] | string;
+  mediaUrl?: string;
 };
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -22,6 +23,8 @@ const IMAGE_SIZE = '1024x1536';
 
 const DEFAULT_IMAGE_PROMPT =
   'Design a good-looking Pinterest pin for this blog post: [target keyword]. Use bold and large text overlay in the center. text overlay is: [target keyword]. Use minimal design. Follow design best practices to get the best CTR.\n\nImportant rules:\n\nThe text overlay must be the exact keyword\nEach pin design must be unique for each keyword\nKeep the design clean and eye-catching\nMake the layout suitable for Pinterest\nUse 9:16 format\nUse strong contrast so the text is easy to read';
+
+const isPublicHttpUrl = (value?: string) => !!value && /^https?:\/\//i.test(value.trim());
 
 const buildImagePrompt = (pin: PinImageInput) => {
   if (pin.custom_prompt?.trim()) {
@@ -79,7 +82,7 @@ const uploadToTmpFiles = async (file: File) => {
 
   const payload = (await response.json()) as { data?: { url?: string } };
   const pageUrl = payload.data?.url?.trim() || '';
-  if (!pageUrl.startsWith('http://') && !pageUrl.startsWith('https://')) {
+  if (!isPublicHttpUrl(pageUrl)) {
     throw new Error('tmpfiles upload returned invalid URL');
   }
 
@@ -97,7 +100,7 @@ const uploadToPublicStorage = async (base64Image: string, keyword: string): Prom
   for (const attempt of attempts) {
     try {
       const uploadedUrl = await attempt();
-      if (uploadedUrl.startsWith('http://') || uploadedUrl.startsWith('https://')) {
+      if (isPublicHttpUrl(uploadedUrl)) {
         return uploadedUrl;
       }
       lastError = `Invalid upload URL returned: ${uploadedUrl}`;
@@ -114,12 +117,11 @@ const generateImage = async (pin: PinImageInput): Promise<string> => {
     model: IMAGE_MODEL,
     prompt: buildImagePrompt(pin),
     size: IMAGE_SIZE,
-    quality: IMAGE_QUALITY,
-    response_format: 'url'
+    quality: IMAGE_QUALITY
   });
 
   const imageUrl = response.data?.[0]?.url;
-  if (imageUrl && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
+  if (isPublicHttpUrl(imageUrl)) {
     return imageUrl;
   }
 
@@ -137,14 +139,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'OPENAI_API_KEY is not configured.' }, { status: 500 });
     }
 
-    const body = (await request.json()) as { pins?: PinImageInput[] };
+    const body = (await request.json()) as { pins?: PinImageInput[]; forceRegenerate?: boolean };
     const pins = (body.pins || []).filter((pin) => pin.keyword?.trim()).slice(0, 5);
+    const forceRegenerate = !!body.forceRegenerate;
 
     if (pins.length < 1) {
       return NextResponse.json({ error: 'Please provide at least 1 pin text payload.' }, { status: 400 });
     }
 
-    const mediaUrls = await Promise.all(pins.map((pin) => generateImage(pin)));
+    const mediaUrls = await Promise.all(
+      pins.map((pin) => {
+        if (!forceRegenerate && !pin.custom_prompt?.trim() && isPublicHttpUrl(pin.mediaUrl)) {
+          return Promise.resolve(pin.mediaUrl!.trim());
+        }
+        return generateImage(pin);
+      })
+    );
 
     const completedPins = pins.map((pin, index) => ({
       ...pin,

@@ -115,7 +115,7 @@ export default function HomePage() {
     }
   };
 
-  const requestImages = async (pinsPayload: PinResult[]) => {
+  const requestImages = async (pinsPayload: PinResult[], forceRegenerate = false) => {
     const response = await fetch('/api/generate-images', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -129,8 +129,10 @@ export default function HomePage() {
           custom_prompt: pin.custom_prompt,
           pinUrl: pin.pinUrl,
           boardName: pin.boardName,
-          keywords: pin.keywords
-        }))
+          keywords: pin.keywords,
+          mediaUrl: pin.mediaUrl
+        })),
+        forceRegenerate
       })
     });
 
@@ -151,7 +153,7 @@ export default function HomePage() {
 
     setLoadingImages(true);
     try {
-      const nextPins = await requestImages(pins);
+      const nextPins = await requestImages(pins, false);
       setPins(nextPins);
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : 'Unexpected error');
@@ -170,7 +172,7 @@ export default function HomePage() {
         throw new Error('Pin not found.');
       }
 
-      const result = await requestImages([target]);
+      const result = await requestImages([target], true);
       if (!result[0]) {
         throw new Error('No regenerated image returned.');
       }

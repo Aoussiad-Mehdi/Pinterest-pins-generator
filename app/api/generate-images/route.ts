@@ -16,15 +16,19 @@ type PinImageInput = {
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const BRAND_URL = 'mehdiaoussiad.com/blog';
 
+// Balance quality + cost: use gpt-image-1 with medium quality for better text fidelity than low.
+const IMAGE_MODEL = 'gpt-image-1';
+const IMAGE_QUALITY: 'medium' = 'medium';
+
 const defaultImagePrompt = (keyword: string) =>
-  `Create an eye-catching Pinterest pin for ${keyword}. Use vibrant colors, clean layout, and strong contrast. Center bold text exactly '${keyword}' with no spelling mistakes. Add small brand text '${BRAND_URL}' at the bottom. Make it professional and Pinterest-ready.`;
+  `Create a high-CTR Pinterest pin for art niche topic '${keyword}'. Use vivid colors, strong color contrast, clean typography, and clear visual hierarchy. Keep layout balanced with whitespace and a focal point. Center bold text exactly '${keyword}' with correct spelling. Add small brand text '${BRAND_URL}' at the bottom. Make it eye-catching and professional.`;
 
 const buildImagePrompt = (pin: PinImageInput) => {
   if (!pin.custom_prompt?.trim()) {
     return defaultImagePrompt(pin.keyword);
   }
 
-  return `${pin.custom_prompt.trim()} Ensure the exact center text is '${pin.keyword}', use vibrant colors, avoid mistakes, and add '${BRAND_URL}' at the bottom.`;
+  return `${pin.custom_prompt.trim()} Apply graphic design best practices: strong contrast, visual hierarchy, clean spacing, readable typography, and vibrant colors. Ensure center text is exactly '${pin.keyword}' and add '${BRAND_URL}' at the bottom.`;
 };
 
 const uploadToPublicStorage = async (base64Image: string, keyword: string): Promise<string> => {
@@ -53,10 +57,10 @@ const uploadToPublicStorage = async (base64Image: string, keyword: string): Prom
 
 const generateImage = async (pin: PinImageInput): Promise<string> => {
   const response = await openai.images.generate({
-    model: 'gpt-image-1',
+    model: IMAGE_MODEL,
     prompt: buildImagePrompt(pin),
     size: '1024x1536',
-    quality: 'low'
+    quality: IMAGE_QUALITY
   });
 
   const imageBase64 = response.data?.[0]?.b64_json;

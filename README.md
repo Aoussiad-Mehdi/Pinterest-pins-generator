@@ -30,7 +30,7 @@ Simple Next.js app that generates Pinterest pins from user keywords using OpenAI
 
 - Columns (exact order):
   `Title,Media URL,Pinterest board,Thumbnail,Description,Link,Publish date,Keywords`
-- Media URLs are public links uploaded during image generation (primary: 0x0.st, fallbacks: catbox.moe and tmpfiles.org; never base64/blob/local paths).
+- Media URLs prefer direct public URLs from the image API; if unavailable, the app uploads base64 images via fallback hosts (0x0.st, catbox.moe, tmpfiles.org).
 - Schedule strategy in UTC:
   - Pin 1: immediate (`""`)
   - Pin 2: now + 5 days

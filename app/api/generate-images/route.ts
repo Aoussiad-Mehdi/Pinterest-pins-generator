@@ -114,12 +114,18 @@ const generateImage = async (pin: PinImageInput): Promise<string> => {
     model: IMAGE_MODEL,
     prompt: buildImagePrompt(pin),
     size: IMAGE_SIZE,
-    quality: IMAGE_QUALITY
+    quality: IMAGE_QUALITY,
+    response_format: 'url'
   });
+
+  const imageUrl = response.data?.[0]?.url;
+  if (imageUrl && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://'))) {
+    return imageUrl;
+  }
 
   const imageBase64 = response.data?.[0]?.b64_json;
   if (!imageBase64) {
-    throw new Error(`No image returned for keyword: ${pin.keyword}`);
+    throw new Error(`No image URL or base64 returned for keyword: ${pin.keyword}`);
   }
 
   return uploadToPublicStorage(imageBase64, pin.keyword);

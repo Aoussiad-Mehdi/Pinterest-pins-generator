@@ -26,9 +26,10 @@ export default function HomePage() {
     event.preventDefault();
     setError('');
 
-    const cleanKeywords = keywords.map((keyword) => keyword.trim());
-    if (cleanKeywords.some((keyword) => !keyword)) {
-      setError('Please fill all 5 keyword fields.');
+    const cleanKeywords = keywords.map((keyword) => keyword.trim()).filter(Boolean);
+
+    if (cleanKeywords.length < 1) {
+      setError('Please add at least 1 keyword.');
       return;
     }
 
@@ -42,13 +43,12 @@ export default function HomePage() {
         body: JSON.stringify({ keywords: cleanKeywords })
       });
 
+      const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
         throw new Error(payload.error || 'Failed to generate pins.');
       }
 
-      const payload = (await response.json()) as { pins: PinResult[] };
-      setPins(payload.pins);
+      setPins((payload as { pins: PinResult[] }).pins || []);
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : 'Unexpected error');
     } finally {
@@ -66,7 +66,7 @@ export default function HomePage() {
   return (
     <main>
       <h1>Pinterest Pin Generator</h1>
-      <p>Enter 5 keywords and generate 5 unique Pinterest pins.</p>
+      <p>Add 1 to 5 keywords. Pins generated = number of keywords entered.</p>
 
       <form onSubmit={handleGenerate}>
         <div className="form-grid">
@@ -75,10 +75,10 @@ export default function HomePage() {
               key={index}
               type="text"
               value={keyword}
-              placeholder={`Keyword ${index + 1}`}
+              placeholder={`Keyword ${index + 1}${index === 0 ? ' (required)' : ' (optional)'}`}
               onChange={(event) => setKeyword(index, event.target.value)}
               maxLength={100}
-              required
+              required={index === 0}
             />
           ))}
         </div>

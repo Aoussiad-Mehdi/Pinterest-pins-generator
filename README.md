@@ -1,6 +1,6 @@
 # Pinterest Pin Generator
 
-Simple Next.js app that generates 5 Pinterest pins from 5 keywords using OpenAI.
+Simple Next.js app that generates Pinterest pins from user keywords using OpenAI.
 
 ## Setup
 
@@ -20,10 +20,13 @@ Simple Next.js app that generates 5 Pinterest pins from 5 keywords using OpenAI.
 
 ## Features
 
-- 5 keyword inputs
-- Generate Pins button
-- 5 generated pin cards with:
-  - 1080x1920 image (9:16)
+- 5 keyword inputs (keyword #1 required, #2-#5 optional)
+- Pins generated = number of keywords entered (1 to 5)
+- Fast generation strategy:
+  - Metadata for all keywords in one text-model request
+  - All images generated in parallel with `Promise.all`
+- Pin cards include:
+  - Generated image
   - Pinterest title
   - Pinterest description
   - Alt text = exact keyword

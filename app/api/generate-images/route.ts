@@ -20,15 +20,15 @@ const IMAGE_MODEL = 'gpt-image-1';
 const IMAGE_QUALITY: 'medium' = 'medium';
 const IMAGE_SIZE = '1024x1536';
 
-const defaultImagePrompt = (keyword: string, uniqueTag: string) =>
-  `Create a Pinterest pin image for '${keyword}'. Center text must be exactly '${keyword}'. Add small brand text '${BRAND_URL}' at the bottom. Use 2:3 vertical composition (target canvas 1000x1500), PNG-ready style. Make this design unique and different from other pins. Unique variation tag: ${uniqueTag}.`;
+const DEFAULT_IMAGE_PROMPT =
+  'Design a good-looking Pinterest pin for this blog post: [target keyword]. Use bold and large text overlay in the center. text overlay is: [target keyword]. Use minimal design. Follow design best practices to get the best CTR.\n\nImportant rules:\n\nThe text overlay must be the exact keyword\nEach pin design must be unique for each keyword\nKeep the design clean and eye-catching\nMake the layout suitable for Pinterest\nUse 9:16 format\nUse strong contrast so the text is easy to read';
 
-const buildImagePrompt = (pin: PinImageInput, uniqueTag: string) => {
-  if (!pin.custom_prompt?.trim()) {
-    return defaultImagePrompt(pin.keyword, uniqueTag);
+const buildImagePrompt = (pin: PinImageInput) => {
+  if (pin.custom_prompt?.trim()) {
+    return pin.custom_prompt.trim();
   }
 
-  return `${pin.custom_prompt.trim()} Ensure center text is exactly '${pin.keyword}', add '${BRAND_URL}' at the bottom, use 2:3 vertical composition close to 1000x1500 PNG output, and make this unique from other pins. Variation tag: ${uniqueTag}.`;
+  return DEFAULT_IMAGE_PROMPT.replaceAll('[target keyword]', pin.keyword);
 };
 
 const uploadTo0x0 = async (file: File) => {
@@ -109,11 +109,10 @@ const uploadToPublicStorage = async (base64Image: string, keyword: string): Prom
   throw new Error(`Public upload failed for keyword: ${keyword}. Last error: ${lastError}`);
 };
 
-const generateImage = async (pin: PinImageInput, index: number): Promise<string> => {
-  const uniqueTag = `${pin.id || pin.keyword}-${index + 1}-${Date.now()}`;
+const generateImage = async (pin: PinImageInput): Promise<string> => {
   const response = await openai.images.generate({
     model: IMAGE_MODEL,
-    prompt: buildImagePrompt(pin, uniqueTag),
+    prompt: buildImagePrompt(pin),
     size: IMAGE_SIZE,
     quality: IMAGE_QUALITY
   });
@@ -139,7 +138,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please provide at least 1 pin text payload.' }, { status: 400 });
     }
 
-    const mediaUrls = await Promise.all(pins.map((pin, index) => generateImage(pin, index)));
+    const mediaUrls = await Promise.all(pins.map((pin) => generateImage(pin)));
 
     const completedPins = pins.map((pin, index) => ({
       ...pin,

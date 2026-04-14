@@ -64,12 +64,35 @@ const uploadToCatbox = async (file: File) => {
   return (await response.text()).trim();
 };
 
+
+const uploadToTmpFiles = async (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch('https://tmpfiles.org/api/v1/upload', {
+    method: 'POST',
+    body: formData
+  });
+
+  if (!response.ok) {
+    throw new Error(`tmpfiles upload HTTP ${response.status}`);
+  }
+
+  const payload = (await response.json()) as { data?: { url?: string } };
+  const pageUrl = payload.data?.url?.trim() || '';
+  if (!pageUrl.startsWith('http://') && !pageUrl.startsWith('https://')) {
+    throw new Error('tmpfiles upload returned invalid URL');
+  }
+
+  return pageUrl.replace('://tmpfiles.org/', '://tmpfiles.org/dl/');
+};
+
 const uploadToPublicStorage = async (base64Image: string, keyword: string): Promise<string> => {
   const fileBuffer = Buffer.from(base64Image, 'base64');
   const safeName = keyword.replace(/[^a-zA-Z0-9-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'pin';
   const file = new File([fileBuffer], `${safeName}.png`, { type: 'image/png' });
 
-  const attempts: Array<() => Promise<string>> = [() => uploadTo0x0(file), () => uploadToCatbox(file)];
+  const attempts: Array<() => Promise<string>> = [() => uploadTo0x0(file), () => uploadToCatbox(file), () => uploadToTmpFiles(file)];
 
   let lastError = '';
   for (const attempt of attempts) {

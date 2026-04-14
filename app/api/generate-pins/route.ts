@@ -6,6 +6,7 @@ type PinText = {
   pinterest_title: string;
   pinterest_description: string;
   alt_text: string;
+  keywords: string[];
 };
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -13,11 +14,12 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const METADATA_PROMPT = `You write Pinterest SEO copy for an art blog.
 Use simple language, active voice, clean punctuation.
 Rules:
-- Title must include the exact target keyword.
+- Title must include exact target keyword.
 - Title max 100 chars.
 - Description max 500 chars.
 - Alt text must be exact keyword.
-Return JSON: {"items":[{"keyword":"","pinterest_title":"","pinterest_description":"","alt_text":""}]}.
+- Also generate 5-8 relevant search keywords per pin.
+Return JSON: {"items":[{"keyword":"","pinterest_title":"","pinterest_description":"","alt_text":"","keywords":[""]}]}
 Keywords:`;
 
 const normalizeKeywords = (keywords: string[]) =>
@@ -34,11 +36,22 @@ const ensureKeywordInTitle = (title: string, keyword: string) => {
   return `${keyword}: ${title}`.slice(0, 100);
 };
 
+const cleanKeywordList = (keyword: string, candidates: unknown) => {
+  const source = Array.isArray(candidates) ? candidates : [];
+  const cleaned = source
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
+  const merged = [keyword, ...cleaned].filter((item, index, arr) => arr.findIndex((v) => v.toLowerCase() === item.toLowerCase()) === index);
+  return merged.slice(0, 8);
+};
+
 const generateAllMetadata = async (keywords: string[]): Promise<PinText[]> => {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     temperature: 0.2,
-    max_tokens: 900,
+    max_tokens: 1200,
     response_format: {
       type: 'json_schema',
       json_schema: {
@@ -58,9 +71,15 @@ const generateAllMetadata = async (keywords: string[]): Promise<PinText[]> => {
                   keyword: { type: 'string' },
                   pinterest_title: { type: 'string', maxLength: 100 },
                   pinterest_description: { type: 'string', maxLength: 500 },
-                  alt_text: { type: 'string' }
+                  alt_text: { type: 'string' },
+                  keywords: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    minItems: 3,
+                    maxItems: 8
+                  }
                 },
-                required: ['keyword', 'pinterest_title', 'pinterest_description', 'alt_text']
+                required: ['keyword', 'pinterest_title', 'pinterest_description', 'alt_text', 'keywords']
               }
             }
           },
@@ -88,7 +107,8 @@ const generateAllMetadata = async (keywords: string[]): Promise<PinText[]> => {
       keyword,
       pinterest_title: ensureKeywordInTitle(hit?.pinterest_title || fallbackTitle, keyword),
       pinterest_description: (hit?.pinterest_description || fallbackDescription).slice(0, 500),
-      alt_text: keyword
+      alt_text: keyword,
+      keywords: cleanKeywordList(keyword, hit?.keywords)
     };
   });
 };

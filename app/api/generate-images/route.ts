@@ -19,6 +19,7 @@ const BRAND_URL = 'mehdiaoussiad.com/blog';
 // Balance quality + cost: use gpt-image-1 with medium quality for better text fidelity than low.
 const IMAGE_MODEL = 'gpt-image-1';
 const IMAGE_QUALITY: 'medium' = 'medium';
+const IMAGE_SIZE = '1024x1024';
 
 const defaultImagePrompt = (keyword: string) =>
   `Create a high-CTR Pinterest pin for art niche topic '${keyword}'. Use vivid colors, strong color contrast, clean typography, and clear visual hierarchy. Keep layout balanced with whitespace and a focal point. Center bold text exactly '${keyword}' with correct spelling. Add small brand text '${BRAND_URL}' at the bottom. Make it eye-catching and professional.`;
@@ -114,7 +115,7 @@ const generateImage = async (pin: PinImageInput): Promise<string> => {
   const response = await openai.images.generate({
     model: IMAGE_MODEL,
     prompt: buildImagePrompt(pin),
-    size: '1024x1536',
+    size: IMAGE_SIZE,
     quality: IMAGE_QUALITY
   });
 

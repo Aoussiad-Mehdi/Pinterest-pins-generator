@@ -34,6 +34,7 @@ const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
 
 export default function HomePage() {
   const [keywords, setKeywords] = useState<string[]>(EMPTY_KEYWORDS);
+  const [bulkKeywords, setBulkKeywords] = useState('');
   const [loadingText, setLoadingText] = useState(false);
   const [loadingImages, setLoadingImages] = useState(false);
   const [regeneratingIndex, setRegeneratingIndex] = useState<number | null>(null);
@@ -58,13 +59,13 @@ export default function HomePage() {
     }
   };
 
-  const mapTextPins = (rawPins: Array<{ keyword: string; pinterest_title: string; pinterest_description: string; alt_text: string }>): PinResult[] =>
+  const mapTextPins = (rawPins: Array<{ keyword: string; pinterest_title: string; pinterest_description: string; alt_text: string; keywords?: string[] }>): PinResult[] =>
     rawPins.map((pin, index) => ({
       id: `${pin.keyword}-${index + 1}`,
       keyword: pin.keyword,
       title: pin.pinterest_title,
       description: pin.pinterest_description,
-      keywords: [pin.keyword],
+      keywords: pin.keywords?.length ? pin.keywords : [pin.keyword],
       mediaUrl: '',
       pinUrl: '',
       boardName: '',
@@ -78,7 +79,13 @@ export default function HomePage() {
     event.preventDefault();
     setError('');
 
-    const cleanKeywords = keywords.map((keyword) => keyword.trim()).filter(Boolean);
+    const fromBulk = bulkKeywords
+      .split(',')
+      .map((keyword) => keyword.trim())
+      .filter(Boolean);
+    const fromInputs = keywords.map((keyword) => keyword.trim()).filter(Boolean);
+    const cleanKeywords = (fromBulk.length ? fromBulk : fromInputs).slice(0, 5);
+
     if (cleanKeywords.length < 1) {
       setError('Please add at least 1 keyword.');
       return;
@@ -99,7 +106,7 @@ export default function HomePage() {
         throw new Error(payload.error || 'Failed to generate text.');
       }
 
-      const rawPins = (payload as { pins: Array<{ keyword: string; pinterest_title: string; pinterest_description: string; alt_text: string }> }).pins || [];
+      const rawPins = (payload as { pins: Array<{ keyword: string; pinterest_title: string; pinterest_description: string; alt_text: string; keywords?: string[] }> }).pins || [];
       setPins(mapTextPins(rawPins));
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : 'Unexpected error');
@@ -248,6 +255,13 @@ export default function HomePage() {
     <main>
       <h1>Pinterest Pin Generator</h1>
       <p>Add 1 to 5 keywords. Generate text first, then generate all images.</p>
+
+      <input
+        type="text"
+        value={bulkKeywords}
+        onChange={(event) => setBulkKeywords(event.target.value)}
+        placeholder="Paste up to 5 keywords separated by commas"
+      />
 
       <form onSubmit={handleGenerateText}>
         <div className="form-grid">

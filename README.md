@@ -20,16 +20,17 @@ Simple Next.js app that generates Pinterest pins from user keywords using OpenAI
 
 ## Workflow
 
-1. Generate Text
-2. Generate All Images
-3. Edit each pin's **Pin URL** and **Pinterest board name**
-4. Click **Create CSV** to download `pinterest-pins-export.csv`
+1. Enter up to 5 keywords (comma-separated in one input, or use individual inputs)
+2. Generate Text
+3. Generate All Images
+4. Edit each pin's **Pin URL** and **Pinterest board name**
+5. Click **Create CSV** to download `pinterest-pins-export.csv`
 
 ## CSV export details
 
 - Columns (exact order):
   `Title,Media URL,Pinterest board,Thumbnail,Description,Link,Publish date,Keywords`
-- Media URLs are public links uploaded during image generation (not base64/blob/local paths).
+- Media URLs are public links uploaded during image generation (primary: 0x0.st, fallbacks: catbox.moe and tmpfiles.org; never base64/blob/local paths).
 - Schedule strategy in UTC:
   - Pin 1: immediate (`""`)
   - Pin 2: now + 5 days
@@ -40,5 +41,10 @@ Simple Next.js app that generates Pinterest pins from user keywords using OpenAI
 
 - Image generation quality/cost balance:
   - model: `gpt-image-1`
-  - quality: `medium` (better text accuracy and visuals than low, with controlled cost)
+  - quality: `medium`
+  - size: `1024x1024` to lower cost and payload size
   - prompts enforce vibrant contrast and graphic-design best practices for art pins
+
+- Keywords field:
+  - AI generates relevant search keywords for each pin
+  - exported as a comma-separated list in CSV

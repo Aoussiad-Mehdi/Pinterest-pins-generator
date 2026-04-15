@@ -23,6 +23,30 @@ const IMAGE_SIZE = '1024x1536';
 
 const LAYOUT_STYLES = ['collage', 'sketchbook style', 'split layout', 'scrapbook style', 'editorial poster style'];
 
+const MAX_QUEUE_SIZE = 10;
+let pendingJobs = 0;
+let queueTail: Promise<void> = Promise.resolve();
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const randomGapMs = () => 12000 + Math.floor(Math.random() * 3000); // 12-15s
+
+const enqueueBatch = async <T>(task: () => Promise<T>): Promise<T> => {
+  if (pendingJobs >= MAX_QUEUE_SIZE) {
+    throw new Error('Image queue is full. Please wait and try again.');
+  }
+
+  pendingJobs += 1;
+
+  const run = queueTail.then(task);
+  queueTail = run.then(() => undefined).catch(() => undefined);
+
+  try {
+    return await run;
+  } finally {
+    pendingJobs -= 1;
+  }
+};
+
 const isPublicHttpUrl = (value?: string) => !!value && /^https?:\/\//i.test(value.trim());
 
 const defaultImagePrompt = (keyword: string, layoutStyle: string) =>
@@ -114,26 +138,52 @@ const uploadToPublicStorage = async (base64Image: string, keyword: string): Prom
   throw new Error(`Public upload failed for keyword: ${keyword}. Last error: ${lastError}`);
 };
 
-const generateImage = async (pin: PinImageInput, index: number): Promise<string> => {
+const isRateLimitError = (error: unknown) => {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  const maybeStatus = (error as Error & { status?: number; code?: number | string }).status;
+  return maybeStatus === 429 || message.includes('429') || message.includes('rate limit');
+};
+
+const generateImageWithRetry = async (pin: PinImageInput, index: number): Promise<string> => {
   const layoutStyle = LAYOUT_STYLES[index % LAYOUT_STYLES.length];
-  const response = await openai.images.generate({
-    model: IMAGE_MODEL,
-    prompt: buildImagePrompt(pin, layoutStyle),
-    size: IMAGE_SIZE,
-    quality: IMAGE_QUALITY
-  });
+  const maxRetries = 4;
+  let backoffMs = 15000;
 
-  const imageUrl = response.data?.[0]?.url;
-  if (isPublicHttpUrl(imageUrl)) {
-    return imageUrl;
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      const response = await openai.images.generate({
+        model: IMAGE_MODEL,
+        prompt: buildImagePrompt(pin, layoutStyle),
+        size: IMAGE_SIZE,
+        quality: IMAGE_QUALITY
+      });
+
+      const imageUrl = response.data?.[0]?.url;
+      if (isPublicHttpUrl(imageUrl)) {
+        return imageUrl;
+      }
+
+      const imageBase64 = response.data?.[0]?.b64_json;
+      if (!imageBase64) {
+        throw new Error(`No image URL or base64 returned for keyword: ${pin.keyword}`);
+      }
+
+      return await uploadToPublicStorage(imageBase64, pin.keyword);
+    } catch (error) {
+      if (!isRateLimitError(error) || attempt === maxRetries) {
+        throw error;
+      }
+
+      await sleep(backoffMs);
+      backoffMs *= 2;
+    }
   }
 
-  const imageBase64 = response.data?.[0]?.b64_json;
-  if (!imageBase64) {
-    throw new Error(`No image URL or base64 returned for keyword: ${pin.keyword}`);
-  }
-
-  return uploadToPublicStorage(imageBase64, pin.keyword);
+  throw new Error(`Image generation failed for keyword: ${pin.keyword}`);
 };
 
 export async function POST(request: Request) {
@@ -150,32 +200,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Please provide at least 1 pin text payload.' }, { status: 400 });
     }
 
-    const mediaUrls = await Promise.all(
-      pins.map((pin, index) => {
-        if (!forceRegenerate && !pin.custom_prompt?.trim() && isPublicHttpUrl(pin.mediaUrl)) {
-          return Promise.resolve(pin.mediaUrl!.trim());
-        }
-        return generateImage(pin, index);
-      })
-    );
+    const completedPins = await enqueueBatch(async () => {
+      const mediaUrls: string[] = [];
 
-    const completedPins = pins.map((pin, index) => ({
-      ...pin,
-      id: pin.id || `${pin.keyword}-${index + 1}`,
-      title: pin.pinterest_title,
-      description: pin.pinterest_description,
-      keywords: pin.keywords || [pin.keyword],
-      mediaUrl: mediaUrls[index],
-      image_url: mediaUrls[index],
-      pinUrl: pin.pinUrl || '',
-      boardName: pin.boardName || '',
-      alt_text: pin.keyword,
-      brand_url: BRAND_URL
-    }));
+      for (let index = 0; index < pins.length; index += 1) {
+        const pin = pins[index];
+
+        if (!forceRegenerate && !pin.custom_prompt?.trim() && isPublicHttpUrl(pin.mediaUrl)) {
+          mediaUrls.push(pin.mediaUrl!.trim());
+          continue;
+        }
+
+        const generatedMediaUrl = await generateImageWithRetry(pin, index);
+        mediaUrls.push(generatedMediaUrl);
+
+        if (index < pins.length - 1) {
+          await sleep(randomGapMs());
+        }
+      }
+
+      return pins.map((pin, index) => ({
+        ...pin,
+        id: pin.id || `${pin.keyword}-${index + 1}`,
+        title: pin.pinterest_title,
+        description: pin.pinterest_description,
+        keywords: pin.keywords || [pin.keyword],
+        mediaUrl: mediaUrls[index],
+        image_url: mediaUrls[index],
+        pinUrl: pin.pinUrl || '',
+        boardName: pin.boardName || '',
+        alt_text: pin.keyword,
+        brand_url: BRAND_URL
+      }));
+    });
 
     return NextResponse.json({ pins: completedPins });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return NextResponse.json({ error: `Failed to generate images: ${message}` }, { status: 500 });
+    const status = message.includes('queue is full') ? 429 : 500;
+    return NextResponse.json({ error: `Failed to generate images: ${message}` }, { status });
   }
 }

@@ -42,7 +42,7 @@ Simple Next.js app that generates Pinterest pins from user keywords using OpenAI
 - Image generation settings:
   - model: `gpt-image-1`
   - quality: `medium`
-  - size: `1024x1536` (2:3 vertical)
+  - size: `1024x1792` (9:16 vertical)
   - default prompt matches the original app prompt provided at project start
   - optional custom prompt is used exactly as entered
   - avoids unnecessary image API calls by reusing existing public media URLs unless regeneration is requested
@@ -55,6 +55,6 @@ Simple Next.js app that generates Pinterest pins from user keywords using OpenAI
 ## Rate-limit protection
 
 - Image requests are processed sequentially (no parallel image generation in one batch).
-- The API waits 12 seconds between image requests.
-- On 429 errors, automatic retries use exponential backoff starting at 12 seconds.
+- The API uses a short 2s gap between image requests for faster batches.
+- On 429 errors, automatic retries use exponential backoff starting at 10 seconds.
 - A small in-memory queue is used; if full, new image batch requests are rejected with a clear message.

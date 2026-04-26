@@ -28,7 +28,7 @@ let pendingJobs = 0;
 let queueTail: Promise<void> = Promise.resolve();
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const randomGapMs = () => 12000 + Math.floor(Math.random() * 3000); // 12-15s
+const requestGapMs = () => 12000; // fixed 12s between requests
 
 const enqueueBatch = async <T>(task: () => Promise<T>): Promise<T> => {
   if (pendingJobs >= MAX_QUEUE_SIZE) {
@@ -151,7 +151,7 @@ const isRateLimitError = (error: unknown) => {
 const generateImageWithRetry = async (pin: PinImageInput, index: number): Promise<string> => {
   const layoutStyle = LAYOUT_STYLES[index % LAYOUT_STYLES.length];
   const maxRetries = 4;
-  let backoffMs = 15000;
+  let backoffMs = 12000;
 
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
@@ -215,7 +215,7 @@ export async function POST(request: Request) {
         mediaUrls.push(generatedMediaUrl);
 
         if (index < pins.length - 1) {
-          await sleep(randomGapMs());
+          await sleep(requestGapMs());
         }
       }
 

@@ -55,6 +55,6 @@ Simple Next.js app that generates Pinterest pins from user keywords using OpenAI
 ## Rate-limit protection
 
 - Image requests are processed sequentially (no parallel image generation in one batch).
-- The API waits 12-15 seconds between image requests.
-- On 429 errors, automatic retries use exponential backoff starting at 15 seconds.
+- The API waits 12 seconds between image requests.
+- On 429 errors, automatic retries use exponential backoff starting at 12 seconds.
 - A small in-memory queue is used; if full, new image batch requests are rejected with a clear message.

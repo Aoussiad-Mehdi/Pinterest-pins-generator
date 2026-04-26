@@ -19,7 +19,7 @@ const BRAND_URL = 'www.mehdiaoussiad.com';
 
 const IMAGE_MODEL = 'gpt-image-1';
 const IMAGE_QUALITY: 'medium' = 'medium';
-const IMAGE_SIZE = '1024x1792';
+const IMAGE_SIZE = '1024x1536';
 
 const LAYOUT_STYLES = ['collage', 'sketchbook style', 'split layout', 'scrapbook style', 'editorial poster style'];
 
